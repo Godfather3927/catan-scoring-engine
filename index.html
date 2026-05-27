@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catan Scoring Engine</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="wood-frame">
+      <header class="app-header">
+        <div class="brand">
+          <span class="brand-hex">VP</span>
+          <div>
+            <p class="kicker">Tabletop scorekeeper</p>
+            <h1>Catan Scoring Engine</h1>
+          </div>
+        </div>
+        <div id="headerActions" class="header-actions hidden">
+          <span id="saveIndicator" class="save-indicator">Not saved yet</span>
+          <button id="undoBtn" class="icon-btn" type="button">Undo</button>
+          <button id="redoBtn" class="icon-btn" type="button">Redo</button>
+          <button id="exportBtn" class="primary small" type="button">Export JSON</button>
+        </div>
+      </header>
+      <main id="app" class="app-shell"></main>
+    </div>
+    <input id="jsonImport" type="file" accept=".json,application/json" hidden>
+    <div id="modalRoot"></div>
+    <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
