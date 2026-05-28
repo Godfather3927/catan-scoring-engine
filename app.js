@@ -44,6 +44,26 @@
     coins: { label: "Coins", suggests: "Wealthiest / Poor Settler status" }
   };
 
+  const COUNT_LOG_COPY = {
+    settlements: { plus: "built a settlement", minus: "removed a settlement from the record" },
+    cities: { plus: "built a city", minus: "removed a city from the record" },
+    vpChits: { plus: "gained a victory point chit", minus: "returned a victory point chit" },
+    developmentVp: { plus: "revealed a victory point development card", minus: "hid a victory point development card" },
+    deliveredGoods: { plus: "delivered goods", minus: "removed a delivered-goods point" },
+    camelVp: { plus: "earned a camel victory point", minus: "removed a camel victory point" },
+    capturedBarbarians: { plus: "captured a barbarian", minus: "released a captured barbarian from the record" },
+    defenderVp: { plus: "earned Defender of CATAN honors", minus: "removed a Defender of CATAN point" },
+    progressCardVp: { plus: "scored a Progress Card victory point", minus: "removed a Progress Card victory point" },
+    conqueredDragons: { plus: "conquered a dragon", minus: "removed a conquered dragon from the record" },
+    enchantedTreasures: { plus: "claimed an unflipped treasure token", minus: "spent or flipped a treasure token" }
+  };
+
+  const FACT_LOG_COPY = {
+    knights: { plus: "played a knight card", minus: "removed a played knight from the record" },
+    harborPoints: { plus: "gained a harbor point", minus: "lost a harbor point" },
+    coins: { plus: "gained a gold coin", minus: "spent a gold coin" }
+  };
+
   const EXPANSIONS = [
     {
       id: "seafarers",
@@ -899,7 +919,11 @@
   function assignAward(key, playerId) {
     const from = game.awards[key] ? playerById(game.awards[key])?.name : "Unassigned";
     const to = playerId ? playerById(playerId)?.name : "Unassigned";
-    commit(`${CATEGORIES[key].label} changed from ${from} to ${to}.`, () => {
+    const label = CATEGORIES[key].label;
+    const description = playerId
+      ? `${to} claimed ${label}${from !== "Unassigned" ? ` from ${from}` : ""}.`
+      : `${label} is now unassigned${from !== "Unassigned" ? ` after leaving ${from}` : ""}.`;
+    commit(description, () => {
       game.awards[key] = playerId || null;
     });
   }
@@ -913,6 +937,23 @@
     commit(`${player.name} changed ${label} from ${oldValue} to ${safeValue}.`, () => {
       if (kind === "fact") player.facts[key] = safeValue;
       else player.counts[key] = safeValue;
+    });
+  }
+
+  function updateValueByStep(kind, key, playerId, amount) {
+    const player = playerById(playerId);
+    const current = kind === "fact" ? player.facts[key] : player.counts[key];
+    const next = Math.max(0, current + amount);
+    if (next === current) return;
+    const copy = kind === "fact" ? FACT_LOG_COPY[key] : COUNT_LOG_COPY[key];
+    const phrase = amount > 0 ? copy?.plus : copy?.minus;
+    const fallbackLabel = kind === "fact" ? RAW_FACTS[key].label : CATEGORIES[key].label;
+    const description = phrase
+      ? `${player.name} ${phrase}.`
+      : `${player.name} ${amount > 0 ? "increased" : "decreased"} ${fallbackLabel}.`;
+    commit(description, () => {
+      if (kind === "fact") player.facts[key] = next;
+      else player.counts[key] = next;
     });
   }
 
@@ -990,37 +1031,35 @@
       modalRoot.innerHTML = "";
     }
     if (target.dataset.adjust) {
-      const player = playerById(target.dataset.player);
-      const existing = target.dataset.adjust === "fact" ? player.facts[target.dataset.key] : player.counts[target.dataset.key];
-      updateValue(target.dataset.adjust, target.dataset.key, target.dataset.player, existing + Number(target.dataset.amount));
+      updateValueByStep(target.dataset.adjust, target.dataset.key, target.dataset.player, Number(target.dataset.amount));
     }
     if (action === "confirm-suggestion") assignAward(target.dataset.key, target.dataset.player);
     if (action === "lock-metropolis") {
       const key = target.dataset.key;
       const state = game.metropolises[key];
       const owner = playerById(state.ownerId);
-      commit(`${METROPOLISES[key].color} Metropolis locked to ${owner.name} at ${METROPOLISES[key].locked}.`, () => {
+      commit(`${owner.name} secured the ${METROPOLISES[key].locked} metropolis.`, () => {
         state.locked = true;
       });
     }
     if (action === "add-route") {
       const player = playerById(target.dataset.player);
       if (player.routes.length >= 5) return;
-      commit(`${player.name} added Route ${player.routes.length + 1}.`, () => {
+      commit(`${player.name} started mapping a new route.`, () => {
         player.routes.push({ id: `route-${Date.now()}`, segments: [] });
       });
     }
     if (action === "delete-route") {
       const player = playerById(target.dataset.player);
       const routeIndex = player.routes.findIndex((route) => route.id === target.dataset.route);
-      commit(`${player.name} removed Route ${routeIndex + 1}.`, () => {
+      commit(`${player.name} removed Route ${routeIndex + 1} from the tracker.`, () => {
         player.routes.splice(routeIndex, 1);
       });
     }
     if (action === "add-segment") {
       const player = playerById(target.dataset.player);
       const route = player.routes.find((entry) => entry.id === target.dataset.route);
-      commit(`${player.name} added a ${target.dataset.type.toLowerCase()} segment to a contiguous route.`, () => {
+      commit(`${player.name} extended a route with a ${target.dataset.type.toLowerCase()}.`, () => {
         route.segments.push({ id: `segment-${Date.now()}-${Math.random()}`, type: target.dataset.type, camel: false });
       });
     }
@@ -1029,7 +1068,7 @@
       const route = player.routes.find((entry) => entry.id === target.dataset.route);
       const segment = route.segments.find((entry) => entry.id === target.dataset.segment);
       const added = !segment.camel;
-      commit(`${player.name} ${added ? "added" : "removed"} a camel tag on a ${segment.type.toLowerCase()} segment.`, () => {
+      commit(`${player.name} ${added ? "marked a camel beside" : "removed the camel mark from"} a ${segment.type.toLowerCase()} segment.`, () => {
         segment.camel = added;
       });
     }
@@ -1037,7 +1076,7 @@
       const player = playerById(target.dataset.player);
       const route = player.routes.find((entry) => entry.id === target.dataset.route);
       const segment = route.segments.find((entry) => entry.id === target.dataset.segment);
-      commit(`${player.name} removed a ${segment.type.toLowerCase()} segment from a route.`, () => {
+      commit(`${player.name} trimmed a ${segment.type.toLowerCase()} from a route.`, () => {
         route.segments = route.segments.filter((entry) => entry.id !== segment.id);
       });
     }
@@ -1109,14 +1148,16 @@
       const key = target.dataset.metropolis;
       const prior = game.metropolises[key].ownerId ? playerById(game.metropolises[key].ownerId).name : "Unassigned";
       const next = target.value ? playerById(target.value).name : "Unassigned";
-      commit(`${METROPOLISES[key].color} Metropolis changed from ${prior} to ${next} at ${METROPOLISES[key].temporary}.`, () => {
+      commit(next === "Unassigned"
+        ? `${METROPOLISES[key].color} Metropolis returned to the board.`
+        : `${next} reached ${METROPOLISES[key].temporary} and took the ${METROPOLISES[key].color} Metropolis${prior !== "Unassigned" ? ` from ${prior}` : ""}.`, () => {
         game.metropolises[key].ownerId = target.value || null;
       });
     }
     if (target.dataset.wonder) {
       const player = playerById(target.dataset.wonder);
       const next = target.value;
-      commit(`${player.name} ${next ? `claimed ${next}` : "released their wonder claim"}.`, () => {
+      commit(`${player.name} ${next ? `claimed ${next} as their Wonder of CATAN` : "released their Wonder of CATAN claim"}.`, () => {
         player.wonder = next ? { name: next, level: 1 } : null;
       });
     }
