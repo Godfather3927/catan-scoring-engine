@@ -34,6 +34,7 @@
     metropolisGreen: { label: "Green Metropolis", group: "Cities & Knights", type: "metropolis", points: 2 },
     metropolisBlue: { label: "Blue Metropolis", group: "Cities & Knights", type: "metropolis", points: 2 },
     conqueredDragons: { label: "Conquered Dragons", group: "Treasures, Dragons & Adventurers", type: "count", points: 1 },
+    enchantedTreasures: { label: "Unflipped Treasure Tokens", group: "Treasures, Dragons & Adventurers", type: "threshold", points: 0 },
     wonder: { label: "Wonder of CATAN", group: "Seafarers", type: "wonder", points: 0 }
   };
 
@@ -88,7 +89,7 @@
         ["greater-catan", "Greater CATAN", []],
         ["desert-dragons", "The Desert Dragons", ["conqueredDragons"]],
         ["great-canal", "The Great Canal", []],
-        ["enchanted-land", "The Enchanted Land", ["conqueredDragons"]]
+        ["enchanted-land", "The Enchanted Land", ["conqueredDragons", "enchantedTreasures"]]
       ]
     }
   ];
@@ -296,8 +297,8 @@
               <tbody>
                 ${active.map((key) => {
                   const item = CATEGORIES[key];
-                  const note = item.divisor ? `per ${item.divisor} recorded` : item.type === "modifier" ? "Adds 1 to required VP" : item.type === "wonder" ? "Victory requirement tracking" : item.type;
-                  return `<tr><td>${escapeHtml(item.label)}</td><td>${item.type === "modifier" || item.type === "wonder" ? "-" : `<input type="number" step="0.5" data-point-value="${key}" value="${setupDraft.points[key]}">`}</td><td class="muted">${escapeHtml(note)}</td></tr>`;
+                  const note = item.type === "threshold" ? "3 tokens = 1 VP, 4+ tokens = 2 VP" : item.divisor ? `per ${item.divisor} recorded` : item.type === "modifier" ? "Adds 1 to required VP" : item.type === "wonder" ? "Victory requirement tracking" : item.type;
+                  return `<tr><td>${escapeHtml(item.label)}</td><td>${item.type === "modifier" || item.type === "wonder" || item.type === "threshold" ? "-" : `<input type="number" step="0.5" data-point-value="${key}" value="${setupDraft.points[key]}">`}</td><td class="muted">${escapeHtml(note)}</td></tr>`;
                 }).join("")}
               </tbody>
             </table>
@@ -418,6 +419,11 @@
         const points = scoredUnits * value;
         if (count || points) parts.push({ label: definition.label, detail: `${count} recorded`, points });
       }
+      if (definition.type === "threshold" && key === "enchantedTreasures") {
+        const count = player.counts[key] || 0;
+        const points = enchantedTreasurePoints(count);
+        if (count || points) parts.push({ label: definition.label, detail: `${count} unflipped`, points });
+      }
       if (["award", "modifier"].includes(definition.type) && game.awards[key] === player.id && definition.type === "award") {
         parts.push({ label: definition.label, detail: "Current holder", points: value });
       }
@@ -463,8 +469,19 @@
     return scoreBreakdown(player).reduce((total, part) => total + part.points, 0);
   }
 
+  function enchantedTreasurePoints(count) {
+    if (count >= 4) return 2;
+    if (count >= 3) return 1;
+    return 0;
+  }
+
   function hasCompletedWonder(player) {
     return player.wonder && Number(player.wonder.level) >= 4;
+  }
+
+  function wonderRequirementLabel(player) {
+    if (!player.wonder) return "completed wonder";
+    return `${player.wonder.name} level 4`;
   }
 
   function requiredTotal(player, baseTarget) {
@@ -577,7 +594,7 @@
 
   function renderDashboard() {
     const winners = potentialWinners();
-    const scoredRows = game.config.activeCategories.filter((key) => CATEGORIES[key].type === "count");
+    const scoredRows = game.config.activeCategories.filter((key) => ["count", "threshold"].includes(CATEGORIES[key].type));
     const factRows = Object.entries(RAW_FACTS).filter(([key]) =>
       (key === "knights" && active("largestArmy")) ||
       (key === "harborPoints" && active("harborMaster")) ||
@@ -613,7 +630,7 @@
             return `<button type="button" class="player-card" style="--player-accent:${color.css};--player-ink:${color.ink}" data-action="open-player" data-player="${player.id}">
               <span class="player-card-top"><span class="player-hex">${escapeHtml(player.icon.slice(0, 3).toUpperCase())}</span><span><h3>${escapeHtml(player.name)}</h3><span class="muted">${escapeHtml(color.label)} / ${escapeHtml(player.icon)}</span></span></span>
               <span class="score-total">${scoreTotal(player)} VP</span>
-              <span class="score-target">Target ${target}${game.config.requiresWonder ? " + completed wonder" : ""}${active("oldBoot") && game.awards.oldBoot === player.id ? " (Old Boot)" : ""}</span>
+              <span class="score-target">Target ${target}${game.config.requiresWonder ? ` + ${escapeHtml(wonderRequirementLabel(player))}` : ""}${active("oldBoot") && game.awards.oldBoot === player.id ? " (Old Boot)" : ""}</span>
               ${badges.length ? `<span class="river-badges">${badges.map((badge) => `<span class="river-badge ${badge.kind}">${escapeHtml(badge.label)} ${badge.points > 0 ? "+" : ""}${badge.points} VP</span>`).join("")}</span>` : ""}
             </button>`;
           }).join("")}
@@ -650,7 +667,7 @@
 
   function renderCountRow(key) {
     const definition = CATEGORIES[key];
-    const pointText = definition.divisor ? `${game.config.points[key]} VP per ${definition.divisor}` : `${game.config.points[key]} VP each`;
+    const pointText = definition.type === "threshold" ? "3 = 1 VP, 4+ = 2 VP" : definition.divisor ? `${game.config.points[key]} VP per ${definition.divisor}` : `${game.config.points[key]} VP each`;
     return `<tr>
       <th>${escapeHtml(definition.label)}<span class="category-note">${escapeHtml(pointText)}</span></th>
       ${game.players.map((player) => `<td>${counterHtml("count", key, player.id, player.counts[key] || 0)}</td>`).join("")}
@@ -856,7 +873,7 @@
         <label class="check-line" style="margin:15px 0;"><input id="editWonderRequired" type="checkbox" ${game.config.requiresWonder ? "checked" : ""}> Primary victory path requires completed Wonder of CATAN</label>
         <table class="rule-table">
           <thead><tr><th>Enabled Category</th><th>Points</th></tr></thead>
-          <tbody>${game.config.activeCategories.filter((key) => !["modifier", "wonder"].includes(CATEGORIES[key].type)).map((key) => `<tr><td>${escapeHtml(CATEGORIES[key].label)}</td><td><input data-edit-point="${key}" type="number" step="0.5" value="${game.config.points[key]}"></td></tr>`).join("")}</tbody>
+          <tbody>${game.config.activeCategories.filter((key) => !["modifier", "wonder", "threshold"].includes(CATEGORIES[key].type)).map((key) => `<tr><td>${escapeHtml(CATEGORIES[key].label)}</td><td><input data-edit-point="${key}" type="number" step="0.5" value="${game.config.points[key]}"></td></tr>`).join("")}</tbody>
         </table>
         <div class="modal-actions" style="margin-top:15px;"><button class="primary" type="button" data-action="save-rules">Save Rule Changes</button></div>
       </section>

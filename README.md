@@ -24,6 +24,8 @@ Then open `http://127.0.0.1:4173/index.html`.
 - Overall scoring table and individual player verification scorecards.
 - Confirmed title holders, Cities & Knights metropolis locking, Wonders of
   CATAN progress, and camel-aware contiguous route tracking.
+- Enchanted Land unflipped treasure-token scoring: 3 tokens = 1 VP,
+  4 or more tokens = 2 VP.
 - Suggestions for Longest Road, Largest Army, and Harbormaster based on
   recorded facts.
 - Automatic Rivers of CATAN coin status: one unique Wealthiest Settler can
