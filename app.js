@@ -41,7 +41,8 @@
   const RAW_FACTS = {
     knights: { label: "Played Knight Cards", suggests: "Largest Army" },
     harborPoints: { label: "Harbor Points", suggests: "Harbormaster" },
-    coins: { label: "Coins", suggests: "Wealthiest / Poor Settler status" }
+    coins: { label: "Coins", suggests: "Wealthiest / Poor Settler status" },
+    baggageTrain: { label: "Baggage Train Level", suggests: "Coins earned from delivered goods", min: 1, max: 5 }
   };
 
   const COUNT_LOG_COPY = {
@@ -61,7 +62,8 @@
   const FACT_LOG_COPY = {
     knights: { plus: "played a knight card", minus: "removed a played knight from the record" },
     harborPoints: { plus: "gained a harbor point", minus: "lost a harbor point" },
-    coins: { plus: "gained a gold coin", minus: "spent a gold coin" }
+    coins: { plus: "gained a gold coin", minus: "spent a gold coin" },
+    baggageTrain: { plus: "upgraded their baggage train", minus: "downgraded their baggage train" }
   };
 
   const EXPANSIONS = [
@@ -390,7 +392,7 @@
         color: setupPlayer.color,
         icon: setupPlayer.icon,
         counts: Object.fromEntries(Object.keys(CATEGORIES).filter((key) => CATEGORIES[key].type === "count").map((key) => [key, 0])),
-        facts: { knights: 0, harborPoints: 0, coins: 0 },
+        facts: { knights: 0, harborPoints: 0, coins: 0, baggageTrain: 1 },
         routes: [],
         wonder: null
       })),
@@ -485,6 +487,14 @@
 
   function playerById(playerId) {
     return game.players.find((player) => player.id === playerId);
+  }
+
+  function normalizeLoadedGame() {
+    if (!game) return;
+    game.players.forEach((player) => {
+      player.facts = player.facts || {};
+      if (!Number(player.facts.baggageTrain)) player.facts.baggageTrain = 1;
+    });
   }
 
   function routeLength(route) {
@@ -686,7 +696,8 @@
     const factRows = Object.entries(RAW_FACTS).filter(([key]) =>
       (key === "knights" && active("largestArmy")) ||
       (key === "harborPoints" && active("harborMaster")) ||
-      (key === "coins" && (active("wealthiestSettler") || active("poorestSettler")))
+      (key === "coins" && (active("wealthiestSettler") || active("poorestSettler") || active("deliveredGoods"))) ||
+      (key === "baggageTrain" && active("deliveredGoods"))
     );
     app.innerHTML = `
       <section class="dashboard">
@@ -755,7 +766,13 @@
 
   function renderCountRow(key) {
     const definition = CATEGORIES[key];
-    const pointText = definition.type === "threshold" ? "3 = 1 VP, 4+ = 2 VP" : definition.divisor ? `${game.config.points[key]} VP per ${definition.divisor}` : `${game.config.points[key]} VP each`;
+    const pointText = key === "deliveredGoods"
+      ? `${game.config.points[key]} VP each; +coins equal to baggage train level`
+      : definition.type === "threshold"
+        ? "3 = 1 VP, 4+ = 2 VP"
+        : definition.divisor
+          ? `${game.config.points[key]} VP per ${definition.divisor}`
+          : `${game.config.points[key]} VP each`;
     return `<tr>
       <th>${escapeHtml(definition.label)}<span class="category-note">${escapeHtml(pointText)}</span></th>
       ${game.players.map((player) => `<td>${counterHtml("count", key, player.id, player.counts[key] || 0)}</td>`).join("")}
@@ -763,18 +780,20 @@
   }
 
   function renderFactRow(key, definition) {
+    const min = definition.min || 0;
+    const max = definition.max || "";
     return `<tr>
       <th>${escapeHtml(definition.label)}<span class="category-note">Suggests ${escapeHtml(definition.suggests)}</span></th>
-      ${game.players.map((player) => `<td>${counterHtml("fact", key, player.id, player.facts[key] || 0)}</td>`).join("")}
+      ${game.players.map((player) => `<td>${counterHtml("fact", key, player.id, player.facts[key] || min, min, max)}</td>`).join("")}
     </tr>`;
   }
 
-  function counterHtml(kind, key, playerId, value) {
+  function counterHtml(kind, key, playerId, value, minValue = 0, maxValue = "") {
     const playerName = playerById(playerId)?.name || "Player";
     const label = kind === "fact" ? RAW_FACTS[key].label : CATEGORIES[key].label;
     return `<span class="counter">
       <button type="button" data-adjust="${kind}" data-key="${key}" data-player="${playerId}" data-amount="-1" aria-label="Decrease ${escapeHtml(playerName)} ${escapeHtml(label)}">-</button>
-      <input type="number" min="0" value="${value}" data-set="${kind}" data-key="${key}" data-player="${playerId}" aria-label="${escapeHtml(playerName)} ${escapeHtml(label)} count">
+      <input type="number" min="${minValue}" ${maxValue ? `max="${maxValue}"` : ""} value="${value}" data-set="${kind}" data-key="${key}" data-player="${playerId}" aria-label="${escapeHtml(playerName)} ${escapeHtml(label)} count">
       <button type="button" data-adjust="${kind}" data-key="${key}" data-player="${playerId}" data-amount="1" aria-label="Increase ${escapeHtml(playerName)} ${escapeHtml(label)}">+</button>
     </span>`;
   }
@@ -897,7 +916,7 @@
             </table>
             <div class="section-title" style="margin-top:15px;"><h3>Tracking Facts</h3></div>
             <div class="fact-grid">
-              ${Object.entries(RAW_FACTS).map(([key, definition]) => `<label class="field">${escapeHtml(definition.label)}${counterHtml("fact", key, player.id, player.facts[key])}</label>`).join("")}
+              ${Object.entries(RAW_FACTS).map(([key, definition]) => `<label class="field">${escapeHtml(definition.label)}${counterHtml("fact", key, player.id, player.facts[key], definition.min || 0, definition.max || "")}</label>`).join("")}
             </div>
             ${active("wonder") ? renderWonderEditor(player) : ""}
           </section>
@@ -998,7 +1017,10 @@
 
   function updateValue(kind, key, playerId, value) {
     const player = playerById(playerId);
-    const safeValue = Math.max(0, Number(value) || 0);
+    const definition = kind === "fact" ? RAW_FACTS[key] : CATEGORIES[key];
+    const minimum = definition.min || 0;
+    const maximum = definition.max || Infinity;
+    const safeValue = Math.min(maximum, Math.max(minimum, Number(value) || minimum));
     const oldValue = kind === "fact" ? player.facts[key] : player.counts[key];
     if (safeValue === oldValue) return;
     const label = kind === "fact" ? RAW_FACTS[key].label : CATEGORIES[key].label;
@@ -1010,8 +1032,15 @@
 
   function updateValueByStep(kind, key, playerId, amount) {
     const player = playerById(playerId);
+    if (kind === "count" && key === "deliveredGoods" && amount > 0) {
+      deliverGood(player);
+      return;
+    }
+    const definition = kind === "fact" ? RAW_FACTS[key] : CATEGORIES[key];
+    const minimum = definition.min || 0;
+    const maximum = definition.max || Infinity;
     const current = kind === "fact" ? player.facts[key] : player.counts[key];
-    const next = Math.max(0, current + amount);
+    const next = Math.min(maximum, Math.max(minimum, current + amount));
     if (next === current) return;
     const copy = kind === "fact" ? FACT_LOG_COPY[key] : COUNT_LOG_COPY[key];
     const phrase = amount > 0 ? copy?.plus : copy?.minus;
@@ -1022,6 +1051,14 @@
     commit(description, () => {
       if (kind === "fact") player.facts[key] = next;
       else player.counts[key] = next;
+    });
+  }
+
+  function deliverGood(player) {
+    const trainLevel = Math.min(5, Math.max(1, Number(player.facts.baggageTrain) || 1));
+    commit(`${player.name} delivered goods with a level ${trainLevel} baggage train and earned ${trainLevel} gold coin${trainLevel === 1 ? "" : "s"}.`, () => {
+      player.counts.deliveredGoods = (player.counts.deliveredGoods || 0) + 1;
+      player.facts.coins = (player.facts.coins || 0) + trainLevel;
     });
   }
 
@@ -1048,6 +1085,7 @@
         const imported = JSON.parse(reader.result);
         if (!imported.players || !imported.config || !Array.isArray(imported.history)) throw new Error("Invalid save");
         game = imported;
+        normalizeLoadedGame();
         game.history.push({ timestamp: new Date().toISOString(), description: "Game imported from JSON checkpoint. Undo history begins fresh." });
         undoStack = [];
         redoStack = [];
@@ -1074,6 +1112,7 @@
     if (action === "import-game") importInput.click();
     if (action === "resume-game") {
       game = getStoredGame();
+      normalizeLoadedGame();
       undoStack = [];
       redoStack = [];
       screen = "dashboard";
