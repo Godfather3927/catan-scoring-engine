@@ -481,7 +481,7 @@
 
   function wonderRequirementLabel(player) {
     if (!player.wonder) return "completed wonder";
-    return `${player.wonder.name} level 4`;
+    return `${player.wonder.name} level ${player.wonder.level}`;
   }
 
   function requiredTotal(player, baseTarget) {
