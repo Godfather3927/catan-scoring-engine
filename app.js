@@ -415,6 +415,74 @@
     return COLORS.find((color) => color.id === colorId) || COLORS[0];
   }
 
+  function playerIconSvg(player) {
+    const color = colorInfo(player.color);
+    const icon = iconPath(player.icon);
+    return `<svg class="player-symbol" viewBox="0 0 64 64" role="img" aria-label="${escapeHtml(color.label)} ${escapeHtml(player.icon)} icon">
+      <title>${escapeHtml(color.label)} ${escapeHtml(player.icon)}</title>
+      <g fill="none" stroke="currentColor" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">${icon}</g>
+    </svg>`;
+  }
+
+  function iconPath(iconName) {
+    const icons = {
+      Helmet: `
+        <path d="M12 34c2-16 13-25 30-23 7 1 11 6 12 13" />
+        <path d="M14 35h35c0 10-7 17-18 17H20c-4 0-7-3-7-7v-4" />
+        <path d="M40 16c-3 7-4 15-2 25" />
+        <path d="M49 28h9" />
+        <path d="M22 34v13" />`,
+      Ship: `
+        <path d="M13 42h38l-6 10H20l-7-10Z" />
+        <path d="M32 12v30" />
+        <path d="M32 15l17 20H32V15Z" />
+        <path d="M31 20L17 36h14V20Z" />`,
+      Castle: `
+        <path d="M15 52V23h9v-8h8v8h8v-8h9v37" />
+        <path d="M12 52h40" />
+        <path d="M25 52V39c0-5 14-5 14 0v13" />
+        <path d="M20 31h6M38 31h6" />`,
+      Dragon: `
+        <path d="M14 46c8 6 22 4 30-5 5-6 5-15-2-20" />
+        <path d="M42 21l9-7-2 12 9 3-11 4" />
+        <path d="M25 43c-2-9 1-17 9-24" />
+        <path d="M25 26L13 18l5 17" />
+        <path d="M38 40l9 10" />`,
+      Wagon: `
+        <path d="M14 38h36l-4 12H18l-4-12Z" />
+        <path d="M19 38V24h26v14" />
+        <path d="M23 24l5-8h16l5 8" />
+        <circle cx="23" cy="52" r="5" />
+        <circle cx="43" cy="52" r="5" />`,
+      Wheat: `
+        <path d="M32 54V12" />
+        <path d="M32 18c-9 1-12 7-13 13 8-1 12-6 13-13Z" />
+        <path d="M32 28c9 1 12 7 13 13-8-1-12-6-13-13Z" />
+        <path d="M32 38c-8 1-11 6-12 11 7-1 11-5 12-11Z" />`,
+      Sheep: `
+        <circle cx="23" cy="35" r="9" />
+        <circle cx="34" cy="31" r="11" />
+        <circle cx="44" cy="36" r="8" />
+        <path d="M48 35l7 3-7 5" />
+        <path d="M22 44v8M43 44v8" />
+        <path d="M53 38h3" />`,
+      Ore: `
+        <path d="M17 45l8-27h20l8 27-12 8H29l-12-8Z" />
+        <path d="M25 18l8 13 12-13" />
+        <path d="M25 45l8-14 8 22" />`,
+      Brick: `
+        <path d="M12 22h40v24H12V22Z" />
+        <path d="M12 34h40" />
+        <path d="M25 22v12M39 34v12" />`,
+      Lumber: `
+        <path d="M21 49l22-34" />
+        <path d="M30 52l22-34" />
+        <path d="M15 42l22-34" />
+        <path d="M20 48h18M26 39h18M32 30h18" />`
+    };
+    return icons[iconName] || icons.Helmet;
+  }
+
   function playerById(playerId) {
     return game.players.find((player) => player.id === playerId);
   }
@@ -648,7 +716,7 @@
             const target = requiredTotal(player, game.config.target);
             const badges = riverBadges(player);
             return `<button type="button" class="player-card" style="--player-accent:${color.css};--player-ink:${color.ink}" data-action="open-player" data-player="${player.id}">
-              <span class="player-card-top"><span class="player-hex">${escapeHtml(player.icon.slice(0, 3).toUpperCase())}</span><span><h3>${escapeHtml(player.name)}</h3><span class="muted">${escapeHtml(color.label)} / ${escapeHtml(player.icon)}</span></span></span>
+              <span class="player-card-top"><span class="player-hex">${playerIconSvg(player)}</span><span><h3>${escapeHtml(player.name)}</h3><span class="muted">${escapeHtml(color.label)} / ${escapeHtml(player.icon)}</span></span></span>
               <span class="score-total">${scoreTotal(player)} VP</span>
               <span class="score-target">Target ${target}${game.config.requiresWonder ? ` + ${escapeHtml(wonderRequirementLabel(player))}` : ""}${active("oldBoot") && game.awards.oldBoot === player.id ? " (Old Boot)" : ""}</span>
               ${badges.length ? `<span class="river-badges">${badges.map((badge) => `<span class="river-badge ${badge.kind}">${escapeHtml(badge.label)} ${badge.points > 0 ? "+" : ""}${badge.points} VP</span>`).join("")}</span>` : ""}
@@ -815,7 +883,7 @@
       <section class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(player.name)} scorecard">
         <div class="modal-head">
           <div class="brand">
-            <span class="player-hex" style="background:${color.css};color:${color.ink}">${escapeHtml(player.icon.slice(0, 3).toUpperCase())}</span>
+            <span class="player-hex" style="--player-accent:${color.css};--player-ink:${color.ink}">${playerIconSvg(player)}</span>
             <div><h2>${escapeHtml(player.name)} Scorecard</h2><span class="muted">${scoreTotal(player)} VP counted / ${requiredTotal(player, game.config.target)} primary target</span></div>
           </div>
           <button class="ghost small" type="button" data-action="close-modal">Close</button>

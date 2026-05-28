@@ -472,7 +472,23 @@ textarea:focus {
   height: 48px;
   background: var(--player-accent, var(--brown));
   color: var(--player-ink, #fff);
-  font-size: 0.68rem;
+}
+
+.player-symbol {
+  color: var(--player-ink, #fff);
+  display: block;
+  height: 33px;
+  width: 33px;
+}
+
+.modal .player-hex {
+  background: var(--player-accent, var(--brown));
+  color: var(--player-ink, #fff);
+}
+
+.modal .player-symbol {
+  height: 37px;
+  width: 37px;
 }
 
 .player-card h3 {

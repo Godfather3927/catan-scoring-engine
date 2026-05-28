@@ -18,6 +18,8 @@ Then open `http://127.0.0.1:4173/index.html`.
 
 - New-game setup with players, standard colors, thematic icon labels,
   expansions and all listed scenario selections.
+- Player cards use color-matched thematic icons for helmets, ships, castles,
+  dragons, wagons, wheat, sheep, ore, brick, and lumber.
 - Custom combinations and optional scoring-category activation.
 - Editable scoring values and configurable wonder-based or points-only
   victory paths.
